@@ -20,6 +20,11 @@ axiosRetry(axios, {
 const app = express();
 app.use(express.json());
 
+// Root route to check if the server is running
+app.get('/', (req, res) => {
+  res.status(200).send('Server is running');
+});
+
 // Validate required environment variables
 const requiredEnvVars = [
   'PF_API_KEY',
@@ -255,17 +260,34 @@ function generateLeadId(lead) {
 // Fetch listing details from Property Finder API
 async function getListingDetails(listingId) {
   try {
-    const token = await getPFToken();
+    const rawToken = await getPFToken();
+
+    // FIX: sanitize token to prevent malformed Authorization header
+    const safeToken = rawToken
+      .replace(/[^A-Za-z0-9\-_.~+/=]/g, "") // remove bad characters
+      .trim();
+
+    // FIX: ensure correct padding for Base64 string
+    const padding = safeToken.length % 4;
+    const fixedToken = padding === 0 ? safeToken : safeToken + "=".repeat(4 - padding);
+
     const response = await axios.get(
       `https://atlas.propertyfinder.com/v1/listings/${listingId}`,
-      { headers: { Authorization: `Bearer ${token}` } }
+      {
+        headers: {
+          Authorization: `Bearer ${fixedToken}`,
+        },
+      }
     );
+
     return response.data;
+
   } catch (error) {
-    console.warn('⚠️  Failed to fetch listing details:', error.response?.data || error.message);
+    console.warn("⚠️  Failed to fetch listing details:", error.response?.data || error.message);
     return null;
   }
 }
+
 
 // Receive lead → push to Zoho
 app.post("/propertyfinder-lead", async (req, res) => {
