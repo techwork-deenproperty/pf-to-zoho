@@ -262,20 +262,20 @@ async function getListingDetails(listingId) {
   try {
     const rawToken = await getPFToken();
 
-    // FIX: sanitize token to prevent malformed Authorization header
-    const safeToken = rawToken
-      .replace(/[^A-Za-z0-9\-_.~+/=]/g, "") // remove bad characters
-      .trim();
+    // Sanitize malformed PF token (fix invalid base64 issues)
+    let safeToken = rawToken.replace(/[^A-Za-z0-9\-_.~+/=]/g, "").trim();
 
-    // FIX: ensure correct padding for Base64 string
-    const padding = safeToken.length % 4;
-    const fixedToken = padding === 0 ? safeToken : safeToken + "=".repeat(4 - padding);
+    // Fix missing Base64 padding (=)
+    const pad = safeToken.length % 4;
+    if (pad !== 0) {
+      safeToken += "=".repeat(4 - pad);
+    }
 
     const response = await axios.get(
       `https://atlas.propertyfinder.com/v1/listings/${listingId}`,
       {
         headers: {
-          Authorization: `Bearer ${fixedToken}`,
+          Authorization: `Bearer ${safeToken}`,
         },
       }
     );
@@ -283,10 +283,14 @@ async function getListingDetails(listingId) {
     return response.data;
 
   } catch (error) {
-    console.warn("⚠️  Failed to fetch listing details:", error.response?.data || error.message);
+    console.warn(
+      `⚠️ Listing fetch failed for ID ${listingId}:`,
+      error.response?.data?.message || error.message
+    );
     return null;
   }
 }
+
 
 
 // Receive lead → push to Zoho
